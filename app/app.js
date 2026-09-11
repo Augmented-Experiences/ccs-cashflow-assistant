@@ -701,7 +701,8 @@ function renderCashflowChart(months) {
         fill: true,
         tension: 0.3,
         pointRadius: 4,
-        pointBackgroundColor: '#173A7A',
+        pointBackgroundColor: '#F4C10E',
+        pointBorderColor: '#173A7A',
       }]
     },
     options: {
@@ -1028,11 +1029,11 @@ function renderMonteCarloResults(data) {
       data: {
         labels,
         datasets: [
-          { label: 'P95', data: data.bandas_mensuales.map(b => b.p95), borderColor: 'rgba(61,174,43,0.5)', fill: false, borderDash: [5,5], pointRadius: 0 },
-          { label: 'P75', data: data.bandas_mensuales.map(b => b.p75), borderColor: 'rgba(61,174,43,0.3)', backgroundColor: 'rgba(61,174,43,0.05)', fill: '+1', pointRadius: 0 },
-          { label: 'Mediana', data: data.bandas_mensuales.map(b => b.p50), borderColor: '#173A7A', borderWidth: 2, pointRadius: 3 },
-          { label: 'P25', data: data.bandas_mensuales.map(b => b.p25), borderColor: 'rgba(220,38,38,0.3)', backgroundColor: 'rgba(220,38,38,0.05)', fill: '+1', pointRadius: 0 },
-          { label: 'P5', data: data.bandas_mensuales.map(b => b.p5), borderColor: 'rgba(220,38,38,0.5)', fill: false, borderDash: [5,5], pointRadius: 0 },
+          { label: 'P95', data: data.bandas_mensuales.map(b => b.p95), borderColor: 'rgba(244,193,14,0.7)', fill: false, borderDash: [5,5], pointRadius: 0 },
+          { label: 'P75', data: data.bandas_mensuales.map(b => b.p75), borderColor: 'rgba(244,193,14,0.45)', backgroundColor: 'rgba(244,193,14,0.08)', fill: '+1', pointRadius: 0 },
+          { label: 'Mediana', data: data.bandas_mensuales.map(b => b.p50), borderColor: '#173A7A', borderWidth: 2, pointRadius: 3, pointBackgroundColor: '#F4C10E' },
+          { label: 'P25', data: data.bandas_mensuales.map(b => b.p25), borderColor: 'rgba(206,17,38,0.35)', backgroundColor: 'rgba(206,17,38,0.06)', fill: '+1', pointRadius: 0 },
+          { label: 'P5', data: data.bandas_mensuales.map(b => b.p5), borderColor: 'rgba(206,17,38,0.6)', fill: false, borderDash: [5,5], pointRadius: 0 },
         ]
       },
       options: { responsive: true, plugins: { legend: { position: 'bottom' } }, scales: { y: { ticks: { callback: v => formatCurrencyShort(v) } } } }
@@ -1658,7 +1659,7 @@ async function loadTokenStats() {
           datasets: [{
             label: 'Tokens usados',
             data: agentTokens,
-            backgroundColor: ['#173A7A', '#2E6FC0', '#3DAE2B', '#F59E0B', '#EF4444', '#8B5CF6'],
+            backgroundColor: ['#173A7A', '#F4C10E', '#CE1126', '#2E6FC0', '#3DAE2B', '#8B5CF6'],
           }]
         },
         options: {
