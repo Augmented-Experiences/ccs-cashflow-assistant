@@ -11,6 +11,15 @@ DESKTOP="$(dirname "$HERE")"
 ROOT="$(dirname "$DESKTOP")"
 cd "$ROOT"
 
+# --- Verificar Rust (se usa para el target triple y luego para 'npm run build') ---
+if ! command -v rustc >/dev/null 2>&1; then
+  echo "ERROR: no se encontró 'rustc' (Rust) en el PATH." >&2
+  echo "       Instálalo con rustup (https://rustup.rs) y reabre la terminal:" >&2
+  echo "         curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh" >&2
+  echo "       Rust también es necesario para 'npm run build'." >&2
+  exit 1
+fi
+
 # --- Seleccionar intérprete de Python (preferir 3.12; soportado 3.10–3.12) ---
 if [ -n "${PYTHON:-}" ]; then
   PY="$PYTHON"

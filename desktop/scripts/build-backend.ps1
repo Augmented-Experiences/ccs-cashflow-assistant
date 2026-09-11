@@ -14,6 +14,19 @@ $Desktop = Split-Path -Parent $Here
 $Root = Split-Path -Parent $Desktop
 Set-Location $Root
 
+# --- Verificar Rust (se usa para el target triple y luego para 'npm run build') ---
+if (-not (Get-Command rustc -ErrorAction SilentlyContinue)) {
+    Write-Host ""
+    Write-Host "ERROR: no se encontró 'rustc' (Rust) en el PATH." -ForegroundColor Red
+    Write-Host "       Rust es necesario para nombrar el sidecar y para compilar la app Tauri." -ForegroundColor Yellow
+    Write-Host ""
+    Write-Host "  Solución:" -ForegroundColor Cyan
+    Write-Host "    winget install -e --id Rustlang.Rustup" -ForegroundColor Cyan
+    Write-Host "    # cierra y reabre PowerShell (para refrescar el PATH), luego:" -ForegroundColor Cyan
+    Write-Host "    rustup default stable-msvc" -ForegroundColor Cyan
+    throw "Rust no está instalado o no está en el PATH."
+}
+
 # --- Seleccionar intérprete de Python ---
 $Py = $null
 if (Test-Path "venv\Scripts\python.exe") {

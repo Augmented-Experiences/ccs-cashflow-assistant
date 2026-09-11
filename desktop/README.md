@@ -63,6 +63,14 @@ Los instaladores de cada SO deben construirse en su propio SO. Usa el workflow d
   powershell -ExecutionPolicy Bypass -File desktop\scripts\build-backend.ps1
   ```
 
+- **`rustc : The term 'rustc' is not recognized...` (Windows) o `rustc: command not found`:** Rust no está instalado o no está en el PATH. Instálalo y reabre la terminal:
+  ```powershell
+  winget install -e --id Rustlang.Rustup
+  # reabre PowerShell y luego:
+  rustup default stable-msvc
+  ```
+  Rust es necesario tanto para nombrar el sidecar como para `npm run build`.
+
 ## Cómo funciona con Ollama y los modelos
 
 Igual que la versión Pinokio: Ollama y los modelos viven en la máquina del usuario. Al iniciar, la app (best-effort) arranca `ollama serve` y descarga el modelo según la RAM (`<6 GB` → `llama3.2:1b`, `6–12 GB` → `llama3.2:3b`, `>12 GB` → `llama3.1:8b`). Si Ollama no está instalado, la app abre igual y la UI indica que el motor de IA está desconectado con instrucciones. Requiere internet solo la primera vez; luego funciona 100% local.
