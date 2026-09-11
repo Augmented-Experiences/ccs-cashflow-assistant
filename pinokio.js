@@ -4,7 +4,8 @@
  * Menú dinámico según estado del plugin:
  *   - No instalado: botón de instalación
  *   - Instalado y corriendo: estado activo + botón detener + abrir UI
- *   - Instalado y detenido: botón iniciar
+ *   - Actualizando / optimizando disco: estado de progreso
+ *   - Instalado y detenido: iniciar + actualizar + ahorrar espacio + desinstalar
  */
 module.exports = {
   title: "SmartCaja",
@@ -20,6 +21,29 @@ module.exports = {
           icon: "fa-solid fa-download",
           text: "Instalar",
           href: "install.json",
+        },
+      ]
+    }
+    // Estado de tareas de mantenimiento en curso
+    var updating = await kernel.script.running(__dirname, "update.js")
+    if (updating) {
+      return [
+        {
+          default: true,
+          icon: "fa-solid fa-rotate",
+          text: "Actualizando",
+          href: "update.js",
+        },
+      ]
+    }
+    var linking = await kernel.script.running(__dirname, "link.js")
+    if (linking) {
+      return [
+        {
+          default: true,
+          icon: "fa-solid fa-file-zipper",
+          text: "Optimizando disco",
+          href: "link.js",
         },
       ]
     }
@@ -51,6 +75,16 @@ module.exports = {
         icon: "fa-solid fa-play",
         text: "Iniciar",
         href: "start.json",
+      },
+      {
+        icon: "fa-solid fa-rotate",
+        text: "Actualizar",
+        href: "update.js",
+      },
+      {
+        icon: "fa-solid fa-file-zipper",
+        text: "<div><strong>Ahorrar espacio en disco</strong><div>Deduplica librerías del entorno</div></div>",
+        href: "link.js",
       },
       {
         icon: "fa-solid fa-trash",
