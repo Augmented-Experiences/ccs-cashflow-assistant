@@ -76,13 +76,21 @@ Como los repos son separados, se copia el kit a cada uno:
 
 1. Copia a la raíz del repo destino las carpetas `desktop/` y usa su propio `icon.png` (mismo isotipo CCCE) en la raíz.
 2. Sustituye `desktop/smartsuite.config.json` por el de la herramienta (hay ejemplos listos en `desktop/examples/smartredes.config.json` y `desktop/examples/smartgastos.config.json`).
-3. **Requisito de código (1 línea):** el `server/app.py` debe respetar la variable `DATA_DIR`. SmartGastos ya lo hace; **SmartRedes NO**, así que cambia:
-   ```python
-   DATA_DIR = BASE_DIR / "data"
-   # por:
-   DATA_DIR = Path(os.environ.get("DATA_DIR", str(BASE_DIR / "data")))
-   ```
-   (Es retrocompatible: Pinokio no define `DATA_DIR`, así que su comportamiento no cambia.)
+3. **Parche de `server/app.py` (2–3 líneas, retrocompatible con Pinokio):**
+   - `BASE_DIR` debe apuntar al bundle cuando la app está empaquetada (para servir `app/` y `defaults/`):
+     ```python
+     # antes:
+     BASE_DIR = Path(__file__).parent.parent.resolve()
+     # después:
+     BASE_DIR = Path(sys._MEIPASS) if getattr(sys, "frozen", False) else Path(__file__).parent.parent.resolve()
+     ```
+   - `DATA_DIR` debe respetar la variable de entorno (el kit la fija a una carpeta escribible por-usuario):
+     ```python
+     DATA_DIR = Path(os.environ.get("DATA_DIR", str(BASE_DIR / "data")))
+     ```
+   - Asegúrate de que `import sys` esté presente.
+
+   Ya hay parches listos en los artefactos del agente: `smartredes_app_py.patch` y `smartgastos_app_py.patch` (aplícalos con `git apply`). Es retrocompatible: Pinokio no define `DATA_DIR` ni `frozen`, así que su comportamiento no cambia.
 4. Genera iconos (`npm run icon`) y construye (`bash scripts/build-backend.sh` + `npm run build`).
 
 El backend se lanza con `PORT` y `DATA_DIR` por entorno, así que sirve para las 3 apps (SmartCaja/SmartRedes usan `--port`/`PORT`; SmartGastos usa `PORT`, default 8000 — irrelevante porque el kit fija el puerto).
