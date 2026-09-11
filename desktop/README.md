@@ -27,7 +27,7 @@ Ventajas: el usuario descarga **un instalador** y ejecuta la app; no necesita co
 
 ## Requisitos de build
 
-- Python 3.12 + este repo (`requirements.txt`) — para empaquetar el backend.
+- **Python 3.10–3.12 (recomendado 3.12)** + este repo (`requirements.txt`) — para empaquetar el backend. **No uses 3.13/3.14**: `numpy 1.26.4` (pinneado) no publica wheels para esas versiones y pip intentaría compilarlo desde fuente (falla en Windows). Los scripts de build validan la versión y avisan.
 - Rust (stable) + Cargo.
 - Node 18+ (para la CLI de Tauri).
 - Linux: `libwebkit2gtk-4.1-dev`, `librsvg2-dev`, `libgtk-3-dev`, `libayatana-appindicator3-dev`, `patchelf`, `build-essential` (ver CI).
@@ -51,6 +51,17 @@ Los instaladores quedan en `desktop/src-tauri/target/release/bundle/` (`.AppImag
 ## Build multiplataforma (recomendado)
 
 Los instaladores de cada SO deben construirse en su propio SO. Usa el workflow de GitHub Actions incluido: `.github/workflows/desktop-build.yml` (ejecútalo con *workflow_dispatch* o al publicar un tag `v*`). Genera los artefactos para Windows/macOS/Linux y los sube como *artifacts*.
+
+## Troubleshooting
+
+- **`Preparing metadata (pyproject.toml) ... error` al instalar numpy (Windows):** tu Python es demasiado nuevo (3.13/3.14) y `numpy 1.26.4` no tiene wheel; pip intenta compilar desde fuente. Solución: usa Python 3.12.
+  ```powershell
+  winget install -e --id Python.Python.3.12
+  Remove-Item -Recurse -Force venv
+  py -3.12 -m venv venv
+  venv\Scripts\python -m pip install -r requirements.txt pyinstaller
+  powershell -ExecutionPolicy Bypass -File desktop\scripts\build-backend.ps1
+  ```
 
 ## Cómo funciona con Ollama y los modelos
 
