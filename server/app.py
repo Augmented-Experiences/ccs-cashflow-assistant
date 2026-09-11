@@ -1,5 +1,5 @@
 """
-CCS Cashflow Assistant — Backend FastAPI
+SmartCaja — Backend FastAPI
 Plugin de Pinokio para gestión de flujos de caja con IA local para PYMEs.
 
 Seguridad aplicada:
@@ -107,13 +107,13 @@ RATE_LIMIT_MAX_REQUESTS = 20
 # ---------------------------------------------------------------------------
 # Logging mejorado para visibilidad en consola Pinokio
 _log_format = "%(asctime)s [%(levelname)s] [%(name)s] %(message)s"
-_log_level = logging.DEBUG if os.environ.get("CCS_DEBUG") else logging.INFO
+_log_level = logging.DEBUG if os.environ.get("SMARTCAJA_DEBUG") else logging.INFO
 logging.basicConfig(
     level=_log_level,
     format=_log_format,
     datefmt="%H:%M:%S"
 )
-logger = logging.getLogger("cashflow-assistant")
+logger = logging.getLogger("smartcaja")
 logger.setLevel(_log_level)
 
 # Reducir ruido de librerías externas
@@ -122,7 +122,7 @@ logging.getLogger("httpcore").setLevel(logging.WARNING)
 
 # Banner de inicio visible en Pinokio
 print("="*60)
-print("  CCS CASHFLOW ASSISTANT v2.1")
+print("  SMARTCAJA v2.1")
 print("  Motor Financiero Modular con IA Local")
 print("="*60)
 print(f"  Log level: {logging.getLevelName(_log_level)}")
@@ -175,7 +175,7 @@ def _check_rate_limit(key: str, max_requests: int = RATE_LIMIT_MAX_REQUESTS, win
 # ---------------------------------------------------------------------------
 # FastAPI App
 # ---------------------------------------------------------------------------
-app = FastAPI(title="CCS Cashflow Assistant", version="0.3.0")
+app = FastAPI(title="SmartCaja", version="0.3.0")
 
 # CORS restringido a localhost (Pinokio siempre corre en localhost)
 app.add_middleware(
@@ -2629,7 +2629,7 @@ async def startup():
             if not dst.exists():
                 shutil.copy2(str(f), str(dst))
     threading.Thread(target=ensure_ollama_running, daemon=True).start()
-    logger.info(f"CCS Cashflow Assistant v2.0.0 iniciado en puerto {PORT} ({sys.platform})")
+    logger.info(f"SmartCaja v2.0.0 iniciado en puerto {PORT} ({sys.platform})")
 
 @app.get("/")
 async def root():
@@ -2649,7 +2649,7 @@ def _collect_export_data() -> dict:
     export_data = {
         "export_version": "1.0",
         "exported_at": datetime.now().isoformat(),
-        "plugin_name": "ccs-cashflow-assistant",
+        "plugin_name": "smartcaja",
         "config": None,
         "agents": None,
         "companies": [],
@@ -2711,7 +2711,7 @@ async def export_all_data():
             "hash_algorithm": "sha256",
             "data": export_data,
         }
-        export_filename = f"ccs_cashflow_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+        export_filename = f"smartcaja_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
         exports_dir = DATA_DIR / "exports"
         exports_dir.mkdir(parents=True, exist_ok=True)
         export_file = exports_dir / export_filename

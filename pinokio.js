@@ -1,5 +1,5 @@
 /**
- * CCS Cashflow Assistant — Configuración de Plugin Pinokio
+ * SmartCaja — Configuración de Plugin Pinokio
  *
  * Menú dinámico según estado del plugin:
  *   - No instalado: botón de instalación
@@ -7,8 +7,8 @@
  *   - Instalado y detenido: botón iniciar
  */
 module.exports = {
-  title: "CCS Cashflow Assistant",
-  description: "Herramienta de flujo de caja inteligente con IA local para PYMEs — Cámara de Comercio de Santiago",
+  title: "SmartCaja",
+  description: "Herramienta de flujo de caja inteligente con IA local para PYMEs — Cámara Colombiana de Comercio Electrónico (CCCE)",
   icon: "icon.png",
   menu: async (kernel, info) => {
     // Verificar si el plugin está instalado (venv creado)
