@@ -65,9 +65,9 @@ Write-Host "==> Instalando dependencias de build (PyInstaller + requirements)"
 & cmd /c "$Py -m pip install --quiet -r requirements.txt pyinstaller"
 
 Write-Host "==> Empaquetando backend con PyInstaller"
-& cmd /c "$Py -m PyInstaller --clean --noconfirm --distpath desktop/backend/dist --workpath desktop/backend/build desktop/backend/smartcaja-backend.spec"
+& cmd /c "$Py -m PyInstaller --clean --noconfirm --distpath desktop/backend/dist --workpath desktop/backend/build desktop/backend/backend.spec"
 
 $Triple = ((rustc -vV | Select-String "host: ") -replace "host: ", "").Trim()
 New-Item -ItemType Directory -Force -Path desktop/src-tauri/binaries | Out-Null
-Copy-Item "desktop/backend/dist/smartcaja-backend.exe" "desktop/src-tauri/binaries/smartcaja-backend-$Triple.exe" -Force
-Write-Host "==> Sidecar listo: desktop/src-tauri/binaries/smartcaja-backend-$Triple.exe"
+Copy-Item "desktop/backend/dist/backend.exe" "desktop/src-tauri/binaries/backend-$Triple.exe" -Force
+Write-Host "==> Sidecar listo: desktop/src-tauri/binaries/backend-$Triple.exe"

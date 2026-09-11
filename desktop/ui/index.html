@@ -4,8 +4,12 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>SmartCaja</title>
+  <!-- Marca CCCE compartida + acento por-herramienta (generados por configure.mjs) -->
+  <link rel="stylesheet" href="ccce-theme.css" />
+  <link rel="stylesheet" href="accent.css" />
   <style>
-    :root { --navy: #173A7A; --gold: #F4C10E; --red: #CE1126; }
+    /* Mapea los nombres locales a las variables del brand kit CCCE. */
+    :root { --navy: var(--ccce-azul-oscuro); --gold: var(--ccce-accent); --red: var(--ccce-rojo); }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     html, body { height: 100%; }
     body {

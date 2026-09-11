@@ -34,10 +34,12 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
-    "externalBin": ["binaries/smartcaja-backend"],
+    "externalBin": [
+      "binaries/backend"
+    ],
     "category": "Finance",
     "shortDescription": "Flujo de caja con IA local (CCCE)",
-    "longDescription": "SmartCaja — gestión de flujo de caja inteligente con IA local para PYMEs, de la Cámara Colombiana de Comercio Electrónico (CCCE). Incluye entrevista guiada, motor financiero, métricas y simulación Monte Carlo, funcionando de forma local con Ollama."
+    "longDescription": "SmartCaja — gestión de flujo de caja inteligente con IA local para PYMEs, de la Cámara Colombiana de Comercio Electrónico (CCCE)."
   },
   "plugins": {}
 }

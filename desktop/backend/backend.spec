@@ -53,7 +53,7 @@ exe = EXE(
     a.binaries,
     a.datas,
     [],
-    name="smartcaja-backend",
+    name="backend",
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,

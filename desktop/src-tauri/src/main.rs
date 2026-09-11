@@ -10,7 +10,7 @@ use std::io::{BufRead, Write};
 use std::net::{TcpListener, TcpStream};
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
-use std::sync::Mutex;
+use std::sync::{Mutex, OnceLock};
 use std::time::Duration;
 
 #[cfg(windows)]
@@ -23,6 +23,28 @@ use tauri_plugin_shell::ShellExt;
 /// En Windows evita que se abra una ventana de consola al lanzar procesos.
 #[cfg(windows)]
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+
+// --- Config por-herramienta (generada por scripts/configure.mjs) ---
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct Tier {
+    max_ram_gb: f64,
+    model: String,
+}
+
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct AppConfig {
+    data_dir_name: String,
+    ollama_tiers: Vec<Tier>,
+}
+
+static APP_CONFIG_JSON: &str = include_str!("../appconfig.json");
+
+fn app_config() -> &'static AppConfig {
+    static CFG: OnceLock<AppConfig> = OnceLock::new();
+    CFG.get_or_init(|| serde_json::from_str(APP_CONFIG_JSON).expect("appconfig.json inválido"))
+}
 
 /// Proceso hijo del backend (para terminarlo al salir).
 struct BackendState(Mutex<Option<CommandChild>>);
@@ -102,7 +124,7 @@ fn home_dir() -> PathBuf {
 
 /// Carpeta de datos por-usuario (coincide con la del backend).
 fn user_data_dir() -> PathBuf {
-    let app = "SmartCaja";
+    let app = app_config().data_dir_name.as_str();
     #[cfg(target_os = "windows")]
     {
         let base = std::env::var("APPDATA")
@@ -168,18 +190,22 @@ fn wait_for_port(port: u16, attempts: u32) -> bool {
     false
 }
 
-/// Modelo de Ollama recomendado según la RAM total del equipo.
-fn model_for_ram() -> &'static str {
+/// Modelo de Ollama recomendado según la RAM total del equipo y la config
+/// por-herramienta (tiers en appconfig.json).
+fn model_for_ram() -> String {
     let mut sys = sysinfo::System::new();
     sys.refresh_memory();
     let gb = sys.total_memory() as f64 / 1024.0 / 1024.0 / 1024.0;
-    if gb < 6.0 {
-        "llama3.2:1b"
-    } else if gb < 12.0 {
-        "llama3.2:3b"
-    } else {
-        "llama3.1:8b"
+    let cfg = app_config();
+    for t in &cfg.ollama_tiers {
+        if t.max_ram_gb > 0.0 && gb < t.max_ram_gb {
+            return t.model.clone();
+        }
     }
+    cfg.ollama_tiers
+        .last()
+        .map(|t| t.model.clone())
+        .unwrap_or_else(|| "llama3.2:3b".to_string())
 }
 
 /// Descarga el modelo vía la API de Ollama (`/api/pull`) mostrando el progreso.
@@ -285,7 +311,7 @@ fn bootstrap_ollama(app: tauri::AppHandle) {
             s.message = format!("Descargando el modelo {} (solo la primera vez)…", model);
             s.percent = -1;
         });
-        let ok = pull_model_with_progress(&app, model);
+        let ok = pull_model_with_progress(&app, &model);
 
         if ok {
             ollama_log(&format!("Modelo '{}' listo.", model));
@@ -319,12 +345,15 @@ fn main() {
             let handle = app.handle().clone();
             let port = pick_port();
 
-            // 1) Lanzar el backend empaquetado (sidecar).
+            // 1) Lanzar el backend empaquetado (sidecar), pasándole el puerto y la
+            //    carpeta de datos por entorno (compatible con las apps del SmartSuite).
+            let data_dir = user_data_dir().to_string_lossy().to_string();
             let (mut rx, child) = app
                 .shell()
-                .sidecar("smartcaja-backend")
-                .expect("no se encontró el sidecar smartcaja-backend")
-                .args(["--port", &port.to_string()])
+                .sidecar("backend")
+                .expect("no se encontró el sidecar 'backend'")
+                .env("PORT", port.to_string())
+                .env("DATA_DIR", data_dir)
                 .spawn()
                 .expect("no se pudo iniciar el backend");
             app.state::<BackendState>()

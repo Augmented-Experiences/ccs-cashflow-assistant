@@ -1,6 +1,8 @@
-# SmartCaja — App/Instalador de escritorio (Tauri)
+# SmartSuite Desktop Kit (CCCE) — App/Instalador de escritorio (Tauri)
 
-Instalador nativo de **SmartCaja** (CCCE) para **Windows**, **macOS** y **Linux**, sin necesidad de Pinokio. Empaqueta la interfaz web y el backend FastAPI en una app de escritorio.
+Kit **reutilizable** para empaquetar las herramientas del SmartSuite de la CCCE (**SmartCaja**, **SmartRedes**, **SmartGastos**, …) como instaladores nativos para **Windows**, **macOS** y **Linux**, sin necesidad de Pinokio. Empaqueta la interfaz web + el backend FastAPI en una app de escritorio con identidad CCCE.
+
+Este mismo `desktop/` sirve para las 3 herramientas: solo cambia `smartsuite.config.json` (nombre, id, acento, modelos) — el resto es común. `scripts/configure.mjs` genera los archivos variables antes de compilar.
 
 ## Arquitectura
 
@@ -8,22 +10,42 @@ Instalador nativo de **SmartCaja** (CCCE) para **Windows**, **macOS** y **Linux*
 Ventana Tauri (webview nativo)
         │  al iniciar muestra ui/index.html (pantalla de carga)
         ▼
-Rust (src-tauri/src/main.rs)
+Rust (src-tauri/src/main.rs) — genérico para todas las herramientas
   1. Elige un puerto libre.
-  2. Lanza el backend empaquetado como "sidecar" (smartcaja-backend).
-  3. Prepara Ollama (best-effort): serve + pull del modelo según RAM.
-  4. Espera a que el backend responda y navega la ventana a
-     http://127.0.0.1:<puerto>/ui/index.html (la UI real de SmartCaja).
+  2. Lanza el backend empaquetado como "sidecar" (backend), pasándole
+     PORT y DATA_DIR por variables de entorno.
+  3. Prepara Ollama (best-effort): serve + pull del modelo según RAM
+     (modelos definidos por herramienta en appconfig.json).
+  4. Muestra el progreso en la pantalla de carga y, al estar listo,
+     navega a http://127.0.0.1:<puerto>/ui/index.html (la UI real).
   5. Al cerrar la app, detiene el backend.
         │
         ▼
 Backend FastAPI (server/app.py) empaquetado con PyInstaller
   - Sirve la UI (/ui) y la API (/api), igual que en Pinokio.
   - Recursos (app/, defaults/) desde el bundle; datos del usuario en una
-    carpeta escribible por-usuario (ver server/app.py, modo "frozen").
+    carpeta escribible por-usuario (DATA_DIR por entorno).
 ```
 
 Ventajas: el usuario descarga **un instalador** y ejecuta la app; no necesita conocer Pinokio ni la terminal.
+
+## Configuración por herramienta (`smartsuite.config.json`)
+
+Todo lo específico de cada app vive en `desktop/smartsuite.config.json`:
+
+| Campo | Uso |
+|---|---|
+| `productName`, `identifier`, `version` | Nombre, id de bundle y versión. |
+| `dataDirName` | Nombre de la carpeta de datos por-usuario. |
+| `accent` | Color de acento CCCE para diferenciar la herramienta (ej. dorado/teal/verde). |
+| `window` | Título y tamaño de ventana. |
+| `ollama.tiers` | Modelo a descargar según la RAM (`maxRamGb: 0` = sin límite / último). |
+
+`scripts/configure.mjs` (se ejecuta solo con `npm run build`/`npm run dev`) genera desde ese config: `src-tauri/tauri.conf.json`, `src-tauri/appconfig.json` (que Rust lee) y los CSS de marca (`ui/ccce-theme.css`, `ui/accent.css`).
+
+## Brand kit CCCE (estilo compartido)
+
+`desktop/brand/` contiene la identidad reutilizable: `ccce-theme.css` (paleta azul marino/dorado/rojo + acentos, con `--ccce-accent` sobreescribible por herramienta) y los logos (`logo-ccce.png`, `logo-ccce-full.png`, `isotipo-ccce.png`). Cualquier UI puede enlazar `ccce-theme.css` y usar las variables `--ccce-*` para verse consistente. Cada herramienta se diferencia con su `accent`.
 
 ## Requisitos de build
 
@@ -36,17 +58,36 @@ Ventajas: el usuario descarga **un instalador** y ejecuta la app; no necesita co
 ## Build local
 
 ```bash
-# 1) Empaquetar el backend (genera el sidecar en src-tauri/binaries/)
+# 1) Empaquetar el backend (genera el sidecar 'backend' en src-tauri/binaries/)
 bash desktop/scripts/build-backend.sh      # Windows: desktop/scripts/build-backend.ps1
 
 # 2) Generar iconos (una sola vez; requiere red la primera vez)
 cd desktop && npm install && npm run icon   # crea src-tauri/icons/
 
-# 3) Construir el instalador para tu SO
+# 3) Construir el instalador (configure.mjs corre antes de tauri build)
 npm run build
 ```
 
-Los instaladores quedan en `desktop/src-tauri/target/release/bundle/` (`.AppImage`/`.deb` en Linux, `.dmg` en macOS, `.msi`/`.exe` en Windows).
+Los instaladores quedan en `desktop/src-tauri/target/release/bundle/` (`.AppImage`/`.deb`/`.rpm` en Linux, `.dmg` en macOS, `.msi`/`.exe` en Windows).
+
+## Aplicar el kit a otra herramienta (SmartRedes, SmartGastos)
+
+Como los repos son separados, se copia el kit a cada uno:
+
+1. Copia a la raíz del repo destino las carpetas `desktop/` y usa su propio `icon.png` (mismo isotipo CCCE) en la raíz.
+2. Sustituye `desktop/smartsuite.config.json` por el de la herramienta (hay ejemplos listos en `desktop/examples/smartredes.config.json` y `desktop/examples/smartgastos.config.json`).
+3. **Requisito de código (1 línea):** el `server/app.py` debe respetar la variable `DATA_DIR`. SmartGastos ya lo hace; **SmartRedes NO**, así que cambia:
+   ```python
+   DATA_DIR = BASE_DIR / "data"
+   # por:
+   DATA_DIR = Path(os.environ.get("DATA_DIR", str(BASE_DIR / "data")))
+   ```
+   (Es retrocompatible: Pinokio no define `DATA_DIR`, así que su comportamiento no cambia.)
+4. Genera iconos (`npm run icon`) y construye (`bash scripts/build-backend.sh` + `npm run build`).
+
+El backend se lanza con `PORT` y `DATA_DIR` por entorno, así que sirve para las 3 apps (SmartCaja/SmartRedes usan `--port`/`PORT`; SmartGastos usa `PORT`, default 8000 — irrelevante porque el kit fija el puerto).
+
+Para aplicar además el **estilo CCCE a la UI** de cada herramienta (colores/logos como en SmartCaja), enlaza `brand/ccce-theme.css` en su `app/index.html` y reemplaza su paleta por las variables `--ccce-*` (con su `accent`).
 
 ## Build multiplataforma (recomendado)
 

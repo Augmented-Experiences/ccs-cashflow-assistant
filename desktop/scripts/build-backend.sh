@@ -48,10 +48,10 @@ echo "==> Instalando dependencias de build (PyInstaller + requirements)"
 echo "==> Empaquetando backend con PyInstaller"
 "$PY" -m PyInstaller --clean --noconfirm \
   --distpath desktop/backend/dist --workpath desktop/backend/build \
-  desktop/backend/smartcaja-backend.spec
+  desktop/backend/backend.spec
 
 TRIPLE="$(rustc -vV | sed -n 's/host: //p')"
 mkdir -p desktop/src-tauri/binaries
-cp "desktop/backend/dist/smartcaja-backend" "desktop/src-tauri/binaries/smartcaja-backend-${TRIPLE}"
-chmod +x "desktop/src-tauri/binaries/smartcaja-backend-${TRIPLE}"
-echo "==> Sidecar listo: desktop/src-tauri/binaries/smartcaja-backend-${TRIPLE}"
+cp "desktop/backend/dist/backend" "desktop/src-tauri/binaries/backend-${TRIPLE}"
+chmod +x "desktop/src-tauri/binaries/backend-${TRIPLE}"
+echo "==> Sidecar listo: desktop/src-tauri/binaries/backend-${TRIPLE}"
