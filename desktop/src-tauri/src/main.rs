@@ -1,12 +1,12 @@
 // SmartCaja — app de escritorio nativa (Tauri v2)
 //
-// Arranca el backend FastAPI empaquetado (sidecar `smartcaja-backend`), espera a
-// que responda, carga la UI web en la ventana y, al cerrar, detiene el backend.
-// Además intenta (best-effort) dejar Ollama listo y descargar el modelo acorde a
-// la RAM. Si Ollama no está instalado, la app abre igual y la UI lo indica.
+// Arranca el backend FastAPI empaquetado (sidecar `smartcaja-backend`), prepara
+// Ollama (servicio + descarga del modelo según la RAM) y muestra el progreso en
+// la pantalla de carga. Cuando todo está listo, la ventana carga la UI real.
+// Al cerrar la app, detiene el backend.
 #![cfg_attr(all(not(debug_assertions), target_os = "windows"), windows_subsystem = "windows")]
 
-use std::io::Write;
+use std::io::{BufRead, Write};
 use std::net::{TcpListener, TcpStream};
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
@@ -16,7 +16,7 @@ use std::time::Duration;
 #[cfg(windows)]
 use std::os::windows::process::CommandExt;
 
-use tauri::{Manager, RunEvent};
+use tauri::{Emitter, Manager, RunEvent};
 use tauri_plugin_shell::process::{CommandChild, CommandEvent};
 use tauri_plugin_shell::ShellExt;
 
@@ -24,8 +24,57 @@ use tauri_plugin_shell::ShellExt;
 #[cfg(windows)]
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
-/// Guarda el proceso hijo del backend para poder terminarlo al salir.
+/// Proceso hijo del backend (para terminarlo al salir).
 struct BackendState(Mutex<Option<CommandChild>>);
+
+/// Estado compartido que se muestra en la pantalla de carga.
+#[derive(Clone, serde::Serialize)]
+struct Status {
+    /// "starting" | "ollama" | "downloading" | "ready" | "warning"
+    phase: String,
+    message: String,
+    /// 0–100, o -1 si es indeterminado.
+    percent: i32,
+    /// URL de la UI real (cuando el backend responde).
+    backend_url: Option<String>,
+    /// El backend ya responde: se puede entrar.
+    can_continue: bool,
+    /// El paso de Ollama terminó (éxito, omitido o fallo no fatal).
+    ollama_done: bool,
+}
+
+impl Status {
+    fn initial() -> Self {
+        Status {
+            phase: "starting".into(),
+            message: "Iniciando servicios…".into(),
+            percent: -1,
+            backend_url: None,
+            can_continue: false,
+            ollama_done: false,
+        }
+    }
+}
+
+struct AppStatus(Mutex<Status>);
+
+/// Actualiza el estado compartido y lo emite a la pantalla de carga.
+fn update_status(app: &tauri::AppHandle, f: impl FnOnce(&mut Status)) {
+    let snapshot = {
+        let state = app.state::<AppStatus>();
+        let mut s = state.0.lock().unwrap();
+        f(&mut s);
+        s.clone()
+    };
+    let _ = app.emit("status", snapshot);
+}
+
+/// Comando invocable desde la pantalla de carga para obtener el estado actual
+/// (evita perder actualizaciones si la página carga tarde).
+#[tauri::command]
+fn current_status(state: tauri::State<AppStatus>) -> Status {
+    state.0.lock().unwrap().clone()
+}
 
 /// Comando `ollama` sin ventana de consola en Windows.
 fn ollama_command() -> Command {
@@ -36,7 +85,6 @@ fn ollama_command() -> Command {
     cmd
 }
 
-/// Carpeta home del usuario.
 fn home_dir() -> PathBuf {
     #[cfg(windows)]
     {
@@ -78,7 +126,6 @@ fn user_data_dir() -> PathBuf {
     }
 }
 
-/// Carpeta de logs (se crea si no existe).
 fn log_dir() -> PathBuf {
     let dir = user_data_dir().join("logs");
     let _ = std::fs::create_dir_all(&dir);
@@ -86,7 +133,7 @@ fn log_dir() -> PathBuf {
 }
 
 /// Añade una línea de estado al log de Ollama.
-fn ollama_status(line: &str) {
+fn ollama_log(line: &str) {
     let path = log_dir().join("ollama.log");
     if let Ok(mut f) = std::fs::OpenOptions::new()
         .create(true)
@@ -95,11 +142,6 @@ fn ollama_status(line: &str) {
     {
         let _ = writeln!(f, "{}", line);
     }
-}
-
-/// Crea (trunca) un archivo de log dentro de la carpeta de logs.
-fn log_file(name: &str) -> Option<std::fs::File> {
-    std::fs::File::create(log_dir().join(name)).ok()
 }
 
 /// Elige un puerto libre para el backend (prefiere 7860, luego efímero).
@@ -140,12 +182,69 @@ fn model_for_ram() -> &'static str {
     }
 }
 
-/// Deja Ollama listo (best-effort): si está instalado, asegura el servicio y
-/// descarga el modelo acorde a la RAM. No abre ninguna ventana de consola y
-/// registra el estado y la salida en <datos-usuario>/logs/ para poder revisarlo.
-fn bootstrap_ollama() {
-    std::thread::spawn(|| {
-        ollama_status("== SmartCaja: preparando el motor de IA (Ollama) ==");
+/// Descarga el modelo vía la API de Ollama (`/api/pull`) mostrando el progreso.
+/// Devuelve true si el modelo quedó disponible.
+fn pull_model_with_progress(app: &tauri::AppHandle, model: &str) -> bool {
+    let body = format!("{{\"name\":\"{}\"}}", model);
+    let resp = ureq::post("http://127.0.0.1:11434/api/pull")
+        .set("Content-Type", "application/json")
+        .send_string(&body);
+    let resp = match resp {
+        Ok(r) => r,
+        Err(_) => return false,
+    };
+    let reader = std::io::BufReader::new(resp.into_reader());
+    let mut ok = false;
+    for line in reader.lines() {
+        let line = match line {
+            Ok(l) => l,
+            Err(_) => break,
+        };
+        if line.trim().is_empty() {
+            continue;
+        }
+        let v: serde_json::Value = match serde_json::from_str(&line) {
+            Ok(v) => v,
+            Err(_) => continue,
+        };
+        if v.get("error").is_some() {
+            ok = false;
+            break;
+        }
+        let status = v.get("status").and_then(|s| s.as_str()).unwrap_or("");
+        let total = v.get("total").and_then(|t| t.as_u64());
+        let completed = v.get("completed").and_then(|c| c.as_u64());
+        let pct: i32 = match (total, completed) {
+            (Some(t), Some(c)) if t > 0 => ((c.min(t) * 100) / t) as i32,
+            _ => -1,
+        };
+        let msg = if pct >= 0 {
+            format!("Descargando el modelo {} — {}%", model, pct)
+        } else {
+            format!("Preparando el modelo {} ({})…", model, status)
+        };
+        ollama_log(&msg);
+        update_status(app, |s| {
+            s.phase = "downloading".into();
+            s.message = msg.clone();
+            s.percent = pct;
+        });
+        if status == "success" {
+            ok = true;
+        }
+    }
+    ok
+}
+
+/// Deja Ollama listo (best-effort) mostrando el progreso en la pantalla de carga.
+fn bootstrap_ollama(app: tauri::AppHandle) {
+    std::thread::spawn(move || {
+        update_status(&app, |s| {
+            s.phase = "ollama".into();
+            s.message = "Verificando el motor de IA (Ollama)…".into();
+            s.percent = -1;
+        });
+        ollama_log("== SmartCaja: preparando el motor de IA (Ollama) ==");
 
         let installed = ollama_command()
             .arg("--version")
@@ -155,81 +254,57 @@ fn bootstrap_ollama() {
             .map(|s| s.success())
             .unwrap_or(false);
         if !installed {
-            ollama_status(
-                "Ollama no está instalado. La app abrirá igual y la UI mostrará 'desconectado'. \
-                 Instálalo desde https://ollama.com/download y reinicia SmartCaja.",
-            );
+            ollama_log("Ollama no está instalado. La app abrirá y la UI mostrará 'desconectado'.");
+            update_status(&app, |s| {
+                s.phase = "warning".into();
+                s.message =
+                    "Ollama no está instalado. La app abrirá; instálalo desde ollama.com/download para usar la IA."
+                        .into();
+                s.percent = -1;
+                s.ollama_done = true;
+            });
             return;
         }
-        ollama_status("Ollama detectado.");
 
-        // Asegurar el servicio en 127.0.0.1:11434
         if TcpStream::connect(("127.0.0.1", 11434)).is_err() {
-            ollama_status("Iniciando el servicio 'ollama serve'...");
+            update_status(&app, |s| {
+                s.message = "Iniciando el servicio de IA…".into();
+                s.percent = -1;
+            });
+            ollama_log("Iniciando el servicio 'ollama serve'…");
             let mut cmd = ollama_command();
-            cmd.arg("serve");
-            match log_file("ollama-serve.log") {
-                Some(f) => {
-                    let err = f.try_clone().ok();
-                    cmd.stdout(Stdio::from(f));
-                    match err {
-                        Some(e) => {
-                            cmd.stderr(Stdio::from(e));
-                        }
-                        None => {
-                            cmd.stderr(Stdio::null());
-                        }
-                    }
-                }
-                None => {
-                    cmd.stdout(Stdio::null()).stderr(Stdio::null());
-                }
-            }
+            cmd.arg("serve").stdout(Stdio::null()).stderr(Stdio::null());
             let _ = cmd.spawn();
-            if wait_for_port(11434, 30) {
-                ollama_status("Servicio Ollama listo.");
-            } else {
-                ollama_status("Ollama no respondió a tiempo; se reintentará al usar la app.");
-            }
-        } else {
-            ollama_status("El servicio Ollama ya estaba en ejecución.");
+            wait_for_port(11434, 30);
         }
+        ollama_log("Servicio Ollama disponible.");
 
-        // Descargar el modelo acorde a la RAM
         let model = model_for_ram();
-        ollama_status(&format!(
-            "Descargando el modelo '{}' (puede tardar varios minutos la primera vez)...",
-            model
-        ));
-        let mut pull = ollama_command();
-        pull.args(["pull", model]);
-        match log_file("ollama-pull.log") {
-            Some(f) => {
-                let err = f.try_clone().ok();
-                pull.stdout(Stdio::from(f));
-                match err {
-                    Some(e) => {
-                        pull.stderr(Stdio::from(e));
-                    }
-                    None => {
-                        pull.stderr(Stdio::null());
-                    }
-                }
-            }
-            None => {
-                pull.stdout(Stdio::null()).stderr(Stdio::null());
-            }
-        }
-        match pull.status() {
-            Ok(s) if s.success() => {
-                ollama_status(&format!("Modelo '{}' listo.", model));
-            }
-            _ => {
-                ollama_status(&format!(
-                    "No se pudo descargar '{}' automáticamente. Puedes hacerlo manualmente con: ollama pull {}",
-                    model, model
-                ));
-            }
+        update_status(&app, |s| {
+            s.phase = "downloading".into();
+            s.message = format!("Descargando el modelo {} (solo la primera vez)…", model);
+            s.percent = -1;
+        });
+        let ok = pull_model_with_progress(&app, model);
+
+        if ok {
+            ollama_log(&format!("Modelo '{}' listo.", model));
+            update_status(&app, |s| {
+                s.message = format!("Modelo {} listo.", model);
+                s.percent = 100;
+                s.ollama_done = true;
+            });
+        } else {
+            ollama_log(&format!("No se pudo descargar '{}' automáticamente.", model));
+            update_status(&app, |s| {
+                s.phase = "warning".into();
+                s.message = format!(
+                    "No se pudo descargar {} automáticamente; podrás reintentar desde la app.",
+                    model
+                );
+                s.percent = -1;
+                s.ollama_done = true;
+            });
         }
     });
 }
@@ -238,6 +313,8 @@ fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .manage(BackendState(Mutex::new(None)))
+        .manage(AppStatus(Mutex::new(Status::initial())))
+        .invoke_handler(tauri::generate_handler![current_status])
         .setup(|app| {
             let handle = app.handle().clone();
             let port = pick_port();
@@ -250,7 +327,6 @@ fn main() {
                 .args(["--port", &port.to_string()])
                 .spawn()
                 .expect("no se pudo iniciar el backend");
-
             app.state::<BackendState>()
                 .0
                 .lock()
@@ -266,16 +342,21 @@ fn main() {
                 }
             });
 
-            // 2) Preparar Ollama en segundo plano (best-effort).
-            bootstrap_ollama();
+            // 2) Preparar Ollama con progreso en pantalla.
+            bootstrap_ollama(handle.clone());
 
-            // 3) Cuando el backend responda, cargar la UI real en la ventana.
+            // 3) Cuando el backend responda, habilitar el ingreso a la UI.
+            let ready_handle = handle.clone();
             std::thread::spawn(move || {
                 if wait_for_port(port, 240) {
-                    if let Some(win) = handle.get_webview_window("main") {
-                        let url = format!("http://127.0.0.1:{}/ui/index.html", port);
-                        let _ = win.eval(&format!("window.location.replace('{}')", url));
-                    }
+                    let url = format!("http://127.0.0.1:{}/ui/index.html", port);
+                    update_status(&ready_handle, |s| {
+                        s.backend_url = Some(url);
+                        s.can_continue = true;
+                        if s.phase == "starting" {
+                            s.message = "Servicios listos.".into();
+                        }
+                    });
                 }
             });
 
