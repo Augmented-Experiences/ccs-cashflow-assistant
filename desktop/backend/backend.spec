@@ -5,15 +5,31 @@
 # se incluyen en el bundle; el backend los resuelve vía sys._MEIPASS cuando está
 # congelado (ver server/app.py).
 #
+import json
 from pathlib import Path
 
-ROOT = Path(SPECPATH).resolve().parents[1]  # desktop/backend -> raíz del repo
+BACKEND_DIR = Path(SPECPATH).resolve()      # desktop/backend
+DESKTOP = BACKEND_DIR.parent                 # desktop
+ROOT = DESKTOP.parent                         # raíz del repo
 SERVER = ROOT / "server"
+
+# Config por-herramienta (excludes/datas opcionales)
+_pyi = {}
+try:
+    with open(DESKTOP / "smartsuite.config.json", encoding="utf-8") as _f:
+        _pyi = (json.load(_f) or {}).get("pyinstaller", {}) or {}
+except Exception:
+    _pyi = {}
 
 datas = [
     (str(ROOT / "app"), "app"),
     (str(ROOT / "defaults"), "defaults"),
 ]
+# Recursos adicionales por-herramienta: ["carpeta", ...] relativos a la raíz del repo
+for _d in _pyi.get("extraDatas", []):
+    _p = ROOT / _d
+    if _p.exists():
+        datas.append((str(_p), _d))
 
 hiddenimports = [
     "uvicorn.logging",
@@ -41,7 +57,7 @@ a = Analysis(
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=["tkinter", "matplotlib", "pytest"],
+    excludes=["tkinter", "matplotlib", "pytest"] + list(_pyi.get("excludes", [])),
     noarchive=False,
 )
 

@@ -14,5 +14,9 @@
       { "maxRamGb": 12, "model": "llama3.2:3b" },
       { "maxRamGb": 0, "model": "llama3.1:8b" }
     ]
+  },
+  "pyinstaller": {
+    "$comment": "El motor de imágenes (diffusers/transformers/torch) y el scraper con navegador (playwright) son opcionales y se excluyen del instalador para mantenerlo liviano; se pueden habilitar aparte.",
+    "excludes": ["torch", "torchvision", "torchaudio", "diffusers", "transformers", "accelerate", "safetensors", "tokenizers", "huggingface_hub", "playwright", "scipy"]
   }
 }
