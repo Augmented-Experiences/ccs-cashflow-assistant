@@ -42,8 +42,12 @@ if [ "$MAJOR" != "3" ] || [ "$MINOR" -lt 10 ] || [ "$MINOR" -gt 12 ]; then
 fi
 echo "==> Usando Python $VER ($PY)"
 
-echo "==> Instalando dependencias de build (PyInstaller + requirements)"
-"$PY" -m pip install --quiet -r requirements.txt pyinstaller
+# Usa requirements-desktop.txt (subconjunto liviano, sin deps pesadas opcionales
+# como torch/easyocr) si existe; si no, cae a requirements.txt.
+REQ="requirements.txt"
+[ -f "requirements-desktop.txt" ] && REQ="requirements-desktop.txt"
+echo "==> Instalando dependencias de build desde $REQ (+ PyInstaller)"
+"$PY" -m pip install --quiet -r "$REQ" pyinstaller
 
 echo "==> Empaquetando backend con PyInstaller"
 "$PY" -m PyInstaller --clean --noconfirm \

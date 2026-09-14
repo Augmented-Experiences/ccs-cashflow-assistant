@@ -61,8 +61,12 @@ if ($major -ne 3 -or $minor -lt 10 -or $minor -gt 12) {
 }
 Write-Host "==> Usando Python $verRaw ($Py)"
 
-Write-Host "==> Instalando dependencias de build (PyInstaller + requirements)"
-& cmd /c "$Py -m pip install --quiet -r requirements.txt pyinstaller"
+# Usa requirements-desktop.txt (subconjunto liviano, sin deps pesadas opcionales
+# como torch/easyocr) si existe; si no, cae a requirements.txt.
+$Req = "requirements.txt"
+if (Test-Path "requirements-desktop.txt") { $Req = "requirements-desktop.txt" }
+Write-Host "==> Instalando dependencias de build desde $Req (+ PyInstaller)"
+& cmd /c "$Py -m pip install --quiet -r $Req pyinstaller"
 
 Write-Host "==> Empaquetando backend con PyInstaller"
 & cmd /c "$Py -m PyInstaller --clean --noconfirm --distpath desktop/backend/dist --workpath desktop/backend/build desktop/backend/backend.spec"
