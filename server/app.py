@@ -49,13 +49,41 @@ from pydantic import BaseModel, field_validator
 from interview_manager import InterviewManager
 
 # ---------------------------------------------------------------------------
-# Configuración de rutas (siempre absolutas desde __file__)
+# Configuración de rutas
+#   - Modo normal: rutas relativas al código fuente (repo).
+#   - Modo empaquetado (PyInstaller, p. ej. instalador Tauri): los recursos
+#     de solo lectura (app/, defaults/) viven en el bundle (sys._MEIPASS) y
+#     los datos escribibles (data/) en la carpeta de datos del usuario.
 # ---------------------------------------------------------------------------
-BASE_DIR = Path(__file__).parent.parent.resolve()
+_IS_FROZEN = bool(getattr(sys, "frozen", False))
+
+
+def _user_data_dir() -> Path:
+    """Carpeta escribible por-usuario para 'data/' cuando la app está empaquetada."""
+    app_name = "SmartCaja"
+    if sys.platform == "win32":
+        base = os.environ.get("APPDATA") or (Path.home() / "AppData" / "Roaming")
+        return Path(base) / app_name
+    if sys.platform == "darwin":
+        return Path.home() / "Library" / "Application Support" / app_name
+    base = os.environ.get("XDG_DATA_HOME") or (Path.home() / ".local" / "share")
+    return Path(base) / app_name
+
+
+if _IS_FROZEN:
+    # Recursos de solo lectura extraídos por PyInstaller
+    BASE_DIR = Path(getattr(sys, "_MEIPASS", Path(__file__).parent)).resolve()
+else:
+    BASE_DIR = Path(__file__).parent.parent.resolve()
+
 APP_DIR = BASE_DIR / "app"
+DEFAULTS_DIR = BASE_DIR / "defaults"
+
 _raw_data_dir = os.environ.get("DATA_DIR", "")
 if _raw_data_dir and "{{" not in _raw_data_dir and Path(_raw_data_dir).is_absolute():
     DATA_DIR = Path(_raw_data_dir)
+elif _IS_FROZEN:
+    DATA_DIR = _user_data_dir()
 else:
     DATA_DIR = BASE_DIR / "data"
     if _raw_data_dir and "{{" in _raw_data_dir:
@@ -64,7 +92,6 @@ else:
             "DATA_DIR contiene plantilla Pinokio sin resolver: %s. "
             "Usando fallback: %s", _raw_data_dir, DATA_DIR
         )
-DEFAULTS_DIR = BASE_DIR / "defaults"
 
 def _parse_port():
     """Obtener puerto: 1) argumento --port, 2) env PORT, 3) default 7860."""
