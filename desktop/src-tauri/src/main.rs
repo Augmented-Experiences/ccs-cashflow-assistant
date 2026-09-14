@@ -37,6 +37,10 @@ struct Tier {
 struct AppConfig {
     data_dir_name: String,
     ollama_tiers: Vec<Tier>,
+    /// Modelos adicionales a descargar con progreso (p. ej. modelo de visión
+    /// para OCR neuronal). Se descargan igual que el modelo del LLM.
+    #[serde(default)]
+    extra_models: Vec<String>,
 }
 
 static APP_CONFIG_JSON: &str = include_str!("../appconfig.json");
@@ -318,7 +322,6 @@ fn bootstrap_ollama(app: tauri::AppHandle) {
             update_status(&app, |s| {
                 s.message = format!("Modelo {} listo.", model);
                 s.percent = 100;
-                s.ollama_done = true;
             });
         } else {
             ollama_log(&format!("No se pudo descargar '{}' automáticamente.", model));
@@ -329,9 +332,36 @@ fn bootstrap_ollama(app: tauri::AppHandle) {
                     model
                 );
                 s.percent = -1;
-                s.ollama_done = true;
             });
         }
+
+        // Modelos adicionales (p. ej. visión para OCR neuronal), con el mismo progreso.
+        for extra in &app_config().extra_models {
+            update_status(&app, |s| {
+                s.phase = "downloading".into();
+                s.message = format!("Descargando componente de IA {} (solo la primera vez)…", extra);
+                s.percent = -1;
+            });
+            ollama_log(&format!("Descargando modelo adicional '{}'…", extra));
+            if pull_model_with_progress(&app, extra) {
+                ollama_log(&format!("Modelo adicional '{}' listo.", extra));
+                update_status(&app, |s| {
+                    s.message = format!("Componente {} listo.", extra);
+                    s.percent = 100;
+                });
+            } else {
+                ollama_log(&format!("No se pudo descargar el modelo adicional '{}'.", extra));
+                update_status(&app, |s| {
+                    s.phase = "warning".into();
+                    s.message = format!("No se pudo descargar {}; podrás reintentarlo luego.", extra);
+                    s.percent = -1;
+                });
+            }
+        }
+
+        update_status(&app, |s| {
+            s.ollama_done = true;
+        });
     });
 }
 

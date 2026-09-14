@@ -13,5 +13,6 @@
       "maxRamGb": 0,
       "model": "llama3.1:8b"
     }
-  ]
+  ],
+  "extraModels": []
 }

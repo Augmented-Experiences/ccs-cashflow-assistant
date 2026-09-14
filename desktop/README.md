@@ -39,7 +39,8 @@ Todo lo específico de cada app vive en `desktop/smartsuite.config.json`:
 | `dataDirName` | Nombre de la carpeta de datos por-usuario. |
 | `accent` | Color de acento CCCE para diferenciar la herramienta (ej. dorado/teal/verde). |
 | `window` | Título y tamaño de ventana. |
-| `ollama.tiers` | Modelo a descargar según la RAM (`maxRamGb: 0` = sin límite / último). |
+| `ollama.tiers` | Modelo (chat/LLM) a descargar según la RAM (`maxRamGb: 0` = sin límite / último). |
+| `ollama.extraModels` | Modelos adicionales a descargar con progreso (p. ej. un modelo de **visión para OCR neuronal** como `moondream`). Se descargan igual que el LLM, con barra de progreso en la pantalla de carga — así capacidades pesadas (OCR) no requieren empaquetar torch/easyocr. |
 
 `scripts/configure.mjs` (se ejecuta solo con `npm run build`/`npm run dev`) genera desde ese config: `src-tauri/tauri.conf.json`, `src-tauri/appconfig.json` (que Rust lee) y los CSS de marca (`ui/ccce-theme.css`, `ui/accent.css`).
 

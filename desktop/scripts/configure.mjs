@@ -71,7 +71,8 @@ writeFileSync(
 const tiers = ((cfg.ollama && cfg.ollama.tiers) || [{ maxRamGb: 0, model: "llama3.2:3b" }]).map(
   (t) => ({ maxRamGb: Number(t.maxRamGb) || 0, model: String(t.model) })
 );
-const appConfig = { dataDirName: req("dataDirName"), ollamaTiers: tiers };
+const extraModels = ((cfg.ollama && cfg.ollama.extraModels) || []).map(String);
+const appConfig = { dataDirName: req("dataDirName"), ollamaTiers: tiers, extraModels };
 writeFileSync(
   resolve(DESKTOP, "src-tauri/appconfig.json"),
   JSON.stringify(appConfig, null, 2) + "\n"
